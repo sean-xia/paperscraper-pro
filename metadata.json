@@ -1,0 +1,5 @@
+{
+  "name": "PaperScraper Pro",
+  "description": "A specialized tool to scrape, parse, and convert digital newspaper content (like China Education Daily) into clean Markdown, featuring bulk date processing and AI-powered text cleanup.",
+  "requestFramePermissions": []
+}
