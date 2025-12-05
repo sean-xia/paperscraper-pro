@@ -1,10 +1,36 @@
 import { PROXY_PREFIX } from '../constants';
+import { getRandomUserAgent, generateRandomHeaders } from './antibot';
+
+interface FetchOptions {
+  useProxy: boolean;
+  randomizeUserAgent?: boolean;
+  randomizeHeaders?: boolean;
+}
 
 // Helper to handle potential legacy encoding (GBK/GB2312) common in old Chinese sites
-const fetchUrl = async (url: string, useProxy: boolean): Promise<Document> => {
+const fetchUrl = async (url: string, options: FetchOptions): Promise<Document> => {
+  const { useProxy, randomizeUserAgent = false, randomizeHeaders = false } = options;
   const targetUrl = useProxy ? `${PROXY_PREFIX}${encodeURIComponent(url)}` : url;
-  
-  const response = await fetch(targetUrl);
+
+  // Build request headers
+  const headers: HeadersInit = {};
+
+  // Add randomized headers if enabled
+  if (randomizeHeaders) {
+    const randomHeaders = generateRandomHeaders(url);
+    Object.assign(headers, randomHeaders);
+  }
+
+  // Note: User-Agent header is forbidden in browser fetch() and will be ignored
+  // But we include it anyway in case the proxy or environment allows it
+  if (randomizeUserAgent) {
+    headers['User-Agent'] = getRandomUserAgent();
+  }
+
+  const response = await fetch(targetUrl, {
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+  });
+
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
   const buffer = await response.arrayBuffer();

@@ -1,9 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 
 const getClient = () => {
-  // Use process.env.API_KEY exclusively as per guidelines.
-  // The API key is assumed to be pre-configured and accessible.
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Use import.meta.env for Vite environment variables
+  // The API key is configured via VITE_API_KEY environment variable
+  return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 };
 
 export const cleanContentWithGemini = async (rawText: string, title: string): Promise<string> => {

@@ -14,6 +14,16 @@ export interface ScrapeConfig {
   pageDelay?: number; // Extra delay after processing each page (ms)
   retryDelay?: number; // Delay before retry on failure (ms)
   maxRetries?: number; // Maximum number of retry attempts
+
+  // Anti-bot: Rate Limiting
+  enableRateLimiting?: boolean; // Enable smart rate limiting
+  batchSize?: number; // Number of dates to scrape before cooldown
+  cooldownMinutes?: number; // Minutes to wait between batches
+  dailyArticleLimit?: number; // Maximum articles to scrape per day (0 = unlimited)
+
+  // Anti-bot: Request Randomization
+  enableRandomUserAgent?: boolean; // Randomize User-Agent header
+  randomizeHeaders?: boolean; // Add randomized browser-like headers
 }
 
 export interface Article {

@@ -30,6 +30,16 @@ export const DEFAULT_CONFIG = {
   pageDelay: 5000, // Extra delay after processing each page
   retryDelay: 10000, // Delay before retry on failure (10 seconds)
   maxRetries: 3, // Maximum number of retries
+
+  // Anti-bot: Rate Limiting
+  enableRateLimiting: true, // Enable smart rate limiting by default
+  batchSize: 3, // Scrape 3 dates before cooldown
+  cooldownMinutes: 15, // Wait 15 minutes between batches
+  dailyArticleLimit: 0, // Unlimited by default (set to positive number to limit)
+
+  // Anti-bot: Request Randomization
+  enableRandomUserAgent: true, // Randomize User-Agent by default
+  randomizeHeaders: true, // Add random headers by default
 };
 
 export const PROXY_PREFIX = 'https://api.allorigins.win/raw?url=';

@@ -8,6 +8,7 @@ import { ArticleList } from './components/ArticleList';
 import { generateDateRange, formatUrl, fetchUrl, extractArticleLinks, parseArticleContent, extractPageNavLinks } from './services/scraperService';
 import { cleanContentWithGemini } from './services/geminiService';
 import { PlayIcon, PauseIcon, DownloadIcon, MagicWandIcon } from './components/Icons';
+import { RateLimiter } from './services/antibot';
 
 function App() {
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
@@ -19,6 +20,7 @@ function App() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const rateLimiterRef = useRef<RateLimiter | null>(null);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -47,17 +49,21 @@ function App() {
   };
 
   // Fetch with retry mechanism
-  const fetchWithRetry = async (url: string, useProxy: boolean, retries = 0): Promise<Document> => {
+  const fetchWithRetry = async (url: string, retries = 0): Promise<Document> => {
     const maxRetries = config.maxRetries || 3;
     try {
-      return await fetchUrl(url, useProxy);
+      return await fetchUrl(url, {
+        useProxy: config.useProxy,
+        randomizeUserAgent: config.enableRandomUserAgent,
+        randomizeHeaders: config.randomizeHeaders,
+      });
     } catch (error: any) {
       if (retries < maxRetries) {
         const retryNum = retries + 1;
         addLog(`❌ Fetch failed (attempt ${retryNum}/${maxRetries + 1}): ${error.message}`, 'warning');
         addLog(`⏳ Waiting ${config.retryDelay || 10000}ms before retry...`, 'warning');
         await delay(config.retryDelay || 10000);
-        return fetchWithRetry(url, useProxy, retryNum);
+        return fetchWithRetry(url, retryNum);
       } else {
         addLog(`❌ Fetch failed after ${maxRetries + 1} attempts: ${url}`, 'error');
         throw error;
@@ -70,13 +76,25 @@ function App() {
 
     setStatus(AppStatus.RUNNING);
     setProgress(0);
-    setLogs([]); 
-    setArticles([]); 
+    setLogs([]);
+    setArticles([]);
     abortControllerRef.current = new AbortController();
+
+    // Initialize Rate Limiter if enabled
+    if (config.enableRateLimiting) {
+      rateLimiterRef.current = new RateLimiter(
+        config.batchSize || 3,
+        config.cooldownMinutes || 15,
+        config.dailyArticleLimit || 0
+      );
+      addLog(`🛡️ Rate limiting enabled: ${config.batchSize} dates per batch, ${config.cooldownMinutes}min cooldown`, 'info');
+    } else {
+      rateLimiterRef.current = null;
+    }
 
     try {
       const dates = generateDateRange(config.startDate, config.endDate);
-      
+
       if (dates.length === 0) {
           addLog("Invalid date range selected.", "error");
           setStatus(AppStatus.IDLE);
@@ -84,12 +102,27 @@ function App() {
       }
 
       addLog(`Queue: ${dates.length} days (${config.startDate} to ${config.endDate})`);
-      
+
       let processedCount = 0;
       const totalSteps = dates.length;
 
       for (const date of dates) {
         if (abortControllerRef.current?.signal.aborted) break;
+
+        // Check batch limit (rate limiting)
+        if (rateLimiterRef.current) {
+          const batchCheck = rateLimiterRef.current.checkBatchLimit();
+          if (batchCheck.shouldCooldown) {
+            const cooldownMs = (batchCheck.waitMinutes || 0) * 60 * 1000;
+            addLog(`🔒 Batch limit reached. Cooling down for ${batchCheck.waitMinutes} minutes...`, 'warning');
+            addLog(`⏰ Cooldown started at ${new Date().toLocaleTimeString()}`, 'info');
+
+            // Wait for cooldown period
+            await delay(cooldownMs);
+
+            addLog(`✅ Cooldown complete. Resuming at ${new Date().toLocaleTimeString()}`, 'success');
+          }
+        }
 
         addLog(`=== Processing Date: ${date} ===`, 'info');
 
@@ -100,7 +133,7 @@ function App() {
         let pageNodes: string[] = [];
 
         try {
-            const entryDoc = await fetchWithRetry(entryUrl, config.useProxy);
+            const entryDoc = await fetchWithRetry(entryUrl);
 
             // 2. Discover all page links (node_*.htm) from the entry page
             // This grabs the sidebar links "Page 01, Page 02, Page 03..."
@@ -138,7 +171,7 @@ function App() {
              try {
                 // We might have already fetched entry page, but fetching again is simpler logic
                 // unless we cache. Given the delay, it's fine.
-                const nodeDoc = await fetchWithRetry(nodeUrl, config.useProxy);
+                const nodeDoc = await fetchWithRetry(nodeUrl);
 
                 // Get list of articles ({url, title})
                 const articleLinks = extractArticleLinks(nodeDoc, nodeUrl, config.articleLinkSelector);
@@ -155,6 +188,19 @@ function App() {
                 for (const linkObj of articleLinks) {
                     if (abortControllerRef.current?.signal.aborted) break;
 
+                    // Check daily article limit
+                    if (rateLimiterRef.current) {
+                      const dailyCheck = rateLimiterRef.current.checkDailyLimit();
+                      if (!dailyCheck.canProceed) {
+                        addLog(`🚫 Daily article limit reached (${config.dailyArticleLimit}). Stopping.`, 'warning');
+                        setStatus(AppStatus.COMPLETED);
+                        return;
+                      }
+                      if (dailyCheck.remaining && dailyCheck.remaining <= 10) {
+                        addLog(`⚠️ Approaching daily limit: ${dailyCheck.remaining} articles remaining`, 'warning');
+                      }
+                    }
+
                     // Avoid duplicates
                     if (articles.some(a => a.url === linkObj.url)) continue;
 
@@ -162,7 +208,7 @@ function App() {
                     await randomDelay();
 
                     try {
-                        const articleDoc = await fetchWithRetry(linkObj.url, config.useProxy);
+                        const articleDoc = await fetchWithRetry(linkObj.url);
                         
                         // Pass the title we found on the index page as a fallback hint
                         const { title, content } = parseArticleContent(
@@ -193,6 +239,11 @@ function App() {
                         };
 
                         setArticles((prev) => [...prev, newArticle]);
+
+                        // Mark article as processed for rate limiting
+                        if (rateLimiterRef.current) {
+                          rateLimiterRef.current.markArticleProcessed();
+                        }
                     } catch (err: any) {
                         addLog(`Failed to parse article ${linkObj.url}: ${err.message}`, 'error');
                     }
@@ -211,6 +262,11 @@ function App() {
 
         processedCount++;
         setProgress((processedCount / totalSteps) * 100);
+
+        // Mark date as processed for batch rate limiting
+        if (rateLimiterRef.current) {
+          rateLimiterRef.current.markDateProcessed();
+        }
       }
 
       setStatus(AppStatus.COMPLETED);
