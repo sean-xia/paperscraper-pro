@@ -10,7 +10,8 @@ interface FetchOptions {
 // Helper to handle potential legacy encoding (GBK/GB2312) common in old Chinese sites
 const fetchUrl = async (url: string, options: FetchOptions): Promise<Document> => {
   const { useProxy, randomizeUserAgent = false, randomizeHeaders = false } = options;
-  const targetUrl = useProxy ? `${PROXY_PREFIX}${encodeURIComponent(url)}` : url;
+  // Note: allorigins.win expects unencoded URL in the query parameter
+  const targetUrl = useProxy ? `${PROXY_PREFIX}${url}` : url;
 
   // Build request headers
   const headers: HeadersInit = {};
