@@ -232,9 +232,16 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onChange, disa
                         </label>
                       </div>
 
-                      <p className="text-xs text-gray-500 pl-6">
-                        Note: Some headers may be ignored by browser security policies
-                      </p>
+                      <div className="bg-yellow-900/20 border border-yellow-700/30 rounded p-2 mt-2">
+                        <p className="text-xs text-yellow-300/90">
+                          ⚠️ <strong>Browser Limitations:</strong>
+                        </p>
+                        <ul className="text-xs text-yellow-300/70 mt-1 ml-4 space-y-1">
+                          <li>• These features don't work with CORS proxy enabled</li>
+                          <li>• User-Agent, Referer, DNT headers are forbidden by browsers</li>
+                          <li>• Only Accept and Accept-Language can be customized</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>

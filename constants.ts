@@ -38,8 +38,10 @@ export const DEFAULT_CONFIG = {
   dailyArticleLimit: 0, // Unlimited by default (set to positive number to limit)
 
   // Anti-bot: Request Randomization
-  enableRandomUserAgent: true, // Randomize User-Agent by default
-  randomizeHeaders: true, // Add random headers by default
+  // Note: These features don't work in browser environment due to CORS and security restrictions
+  // User-Agent, Referer, DNT, Connection headers are forbidden and will be ignored by the browser
+  enableRandomUserAgent: false, // Disabled by default (doesn't work with proxy)
+  randomizeHeaders: false, // Disabled by default (doesn't work with proxy)
 };
 
 export const PROXY_PREFIX = 'https://api.allorigins.win/raw?url=';

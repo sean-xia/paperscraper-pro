@@ -15,16 +15,23 @@ const fetchUrl = async (url: string, options: FetchOptions): Promise<Document> =
   // Build request headers
   const headers: HeadersInit = {};
 
-  // Add randomized headers if enabled
-  if (randomizeHeaders) {
-    const randomHeaders = generateRandomHeaders(url);
-    Object.assign(headers, randomHeaders);
-  }
+  // IMPORTANT: When using CORS proxy, custom headers are sent to the proxy server, not the target site
+  // Also, browsers forbid setting User-Agent, Referer, DNT, Connection headers - they will be ignored
+  // So we only apply custom headers when NOT using proxy and only use browser-allowed headers
+  if (!useProxy) {
+    // Add randomized headers if enabled (only Accept and Accept-Language are safe in browser)
+    if (randomizeHeaders) {
+      const randomHeaders = generateRandomHeaders(url);
+      // Only include browser-safe headers
+      if (randomHeaders['Accept']) headers['Accept'] = randomHeaders['Accept'];
+      if (randomHeaders['Accept-Language']) headers['Accept-Language'] = randomHeaders['Accept-Language'];
+    }
 
-  // Note: User-Agent header is forbidden in browser fetch() and will be ignored
-  // But we include it anyway in case the proxy or environment allows it
-  if (randomizeUserAgent) {
-    headers['User-Agent'] = getRandomUserAgent();
+    // Note: User-Agent header is forbidden in browser fetch() and will be ignored
+    // We keep this code for documentation purposes, but it won't work in browser
+    if (randomizeUserAgent) {
+      headers['User-Agent'] = getRandomUserAgent();
+    }
   }
 
   const response = await fetch(targetUrl, {
